@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head:*)",
+      "Bash(ls:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}

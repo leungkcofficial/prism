@@ -1,0 +1,53 @@
+# Define default validation rules for each data type
+DEFAULT_VALIDATION_RULES: {
+    'creatinine': {
+        'min_value': 10,    # umol/L
+        'max_value': 3000,  # umol/L
+        'unit': 'umol/L'
+    },
+    'hemoglobin': {
+        'min_value': 3,     # g/dL
+        'max_value': 25,    # g/dL
+        'unit': 'g/dL'
+    },
+    'hemoglobin_a1c': {
+        'min_value': 3,     # %
+        'max_value': 20,    # %
+        'unit': '%'
+    },
+    'albumin': {
+        'min_value': 5,     # g/L
+        'max_value': 60,    # g/L
+        'unit': 'g/L'
+    },
+    'phosphate': {
+        'min_value': 0.1,   # mmol/L
+        'max_value': 5.0,   # mmol/L
+        'unit': 'mmol/L'
+    },
+    'calcium': {
+        'min_value': 1.0,   # mmol/L
+        'max_value': 3.5,   # mmol/L
+        'unit': 'mmol/L'
+    },
+    'calcium_adjusted': {
+        'min_value': 1.0,   # mmol/L
+        'max_value': 3.5,   # mmol/L
+        'unit': 'mmol/L'
+    },
+    'bicarbonate': {
+        'min_value': 1.0,   # mmol/L
+        'max_value': 50.0,  # mmol/L
+        'unit': 'mmol/L'
+    },
+    'urine_protein_creatinine_ratio': {
+        'min_value': 0,     # mg/mmol
+        'max_value': 10000, # mg/mmol
+        'unit': 'mg/mmol'
+    },
+    'urine_albumin_creatinine_ratio': {
+        'min_value': 0,     # mg/mmol
+        'max_value': 10000, # mg/mmol
+        'unit': 'mg/mmol'
+    }
+}

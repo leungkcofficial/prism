@@ -1,0 +1,108 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# ZenML
+.zenml/
+
+# Generated data
+data_lake/
+metadata/
+test_output/
+test_metadata/
+data/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows Zone.Identifier files
+*:Zone.Identifier
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# local evaluation results
+results/
+
+# dummy test codes
+tests/
+test/
+
+# Documentation
+docs/
+test/
+
+# MLflow artifacts
+mlruns/
+
+# Hyperopt results
+hyperopt_results/
+
+# Model weights
+model_weights/
+*.pt
+*.pth
+*.h5
+*.pkl
+*.joblib
+
+# Exception for foundation_models directory
+!foundation_models/
+!foundation_models/**/*.pt
+!foundation_models/**/*.pkl
+!foundation_models/**/*.json
+!foundation_models/**/*.npz
+
+# Data files
+data/
+*.csv
+*.h5
+*.hdf5
+*.parquet
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,49 @@
+cluster: 'key'
+duration: 'duration'
+event: 'endpoint'
+features: ['gender', 'creatinine', 'hemoglobin', 
+          'phosphate', 
+          # 'age', 
+          'age_at_obs', 'bicarbonate', 'albumin', 
+          'uacr', 'cci_score_total', 'ht', 'observation_period',
+          # 'myocardial_infarction',
+          # 'upcr', 
+          # 'congestive_heart_failure', 'peripheral_vascular_disease',
+          # 'cerebrovascular_disease', 
+          # 'dementia', 
+          # 'chronic_pulmonary_disease', 'rheumatic_disease', 'peptic_ulcer_disease', 'mild_liver_disease',
+          # 'diabetes_wo_complication', 'renal_mild_moderate',
+          # 'diabetes_w_complication', 'hemiplegia_paraplegia', 'any_malignancy',
+          # 'liver_severe', 
+          # 'renal_severe', 'hiv', 
+          # 'metastatic_cancer', 
+          # 'aids',
+          ]
+cat_features : ['gender', 'ht', 
+                'myocardial_infarction', 
+                'congestive_heart_failure', 'peripheral_vascular_disease',
+                'cerebrovascular_disease', 'dementia', 'chronic_pulmonary_disease',
+                'rheumatic_disease', 'peptic_ulcer_disease', 'mild_liver_disease',
+                'diabetes_wo_complication',
+                'diabetes_w_complication', 'hemiplegia_paraplegia', 'any_malignancy',
+                'liver_severe', 'metastatic_cancer',
+                ]
+cont_features: ['upcr','creatinine', 'hemoglobin', 'phosphate', 'age_at_obs',
+                'calcium', 'bicarbonate', 'a1c', 'albumin',
+                'uacr', 'cci_score_total', 'observation_period'
+                ]
+kfre: {
+  'age' : 'age',
+  'sex': 'gender',
+  'egfr': 'egfr',
+  'acr': 'uacr',
+  'albumin': 'albumin',
+  'phosphate': 'phosphate',
+  'bicarbonate': 'bicarbonate',
+  'calcium': 'calcium'
+  }
+endpoint: {
+  'censored': 0,
+  'dialysis': 1,
+  'mortality': 2
+}

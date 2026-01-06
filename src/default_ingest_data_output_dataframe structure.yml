@@ -1,0 +1,16 @@
+expected_columns: {
+            'cr_df': ['key', 'date', 'code', 'cr'],
+            'hb_df': ['key', 'date', 'code', 'hb'],
+            'a1c_df': ['key', 'date', 'code', 'a1c'],
+            'alb_df': ['key', 'date', 'code', 'alb'],
+            'po4_df': ['key', 'date', 'code', 'po4'],
+            'ca_df': ['key', 'date', 'code', 'ca'],
+            'ca_adjusted_df': ['key', 'date', 'code', 'ca_adjusted'],
+            'hco3_df': ['key', 'date', 'code', 'hco3'],
+            'upcr_df': ['key', 'date', 'code', 'upacr', 'unit'],
+            'uacr_df': ['key', 'date', 'code', 'upacr', 'unit'],
+            'demo_df': ['key', 'dob', 'gender'],
+            'icd10_df': ['key', 'date', 'icd10'],
+            'death_df': ['key', 'date', 'cause'],
+            'operation_df': ['key', 'date', 'is_dialysis']
+        }

@@ -1,0 +1,17 @@
+# Define default data types and their directories
+DEFAULT_DATA_TYPES: {
+    'lab_data': {'creatinine': 'Cr',
+                 'hemoglobin_a1c': 'a1c',
+                 'albumin': 'alb',
+                 'calcium': 'ca',
+                 'calcium_adjusted': 'ca',  # Uses the same directory as calcium
+                 'hemoglobin': 'Hb',
+                 'bicarbonate': 'hco3',
+                 'phosphate': 'po4',
+                 'urine_protein_creatinine_ratio': 'upacr',
+                 'urine_albumin_creatinine_ratio': 'upacr'
+    },
+    'clinical_data': {'icd10': 'icd10',
+                      'death': 'death',
+                      'operation': 'ot'}
+    }
