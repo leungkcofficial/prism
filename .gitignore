@@ -106,3 +106,6 @@ data/
 # Temporary files
 *.tmp
 *.temp
+
+# NFS temporary files
+.claude/.nfs*
