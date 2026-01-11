@@ -1,0 +1,185 @@
+# PRISM S-Learner Configuration
+# Single model with treatment as feature
+
+project:
+  name: prism
+  mode: s_learner
+  model_type: deepsurv
+  experiment_name: prism_s_learner
+
+# Cohort formation parameters
+cohort:
+  # Persistent eGFR <15 screening
+  egfr_screen_lt15_min_days: 90
+  egfr_screen_lt15_max_days: 365
+
+  # Index date (t₀) definition
+  t0_threshold: 10.0  # eGFR ≤10 mL/min/1.73m²
+  outpatient_only: true  # Only outpatient records to avoid AKI
+  require_confirmatory_egfr: false  # Set true for sensitivity analysis
+
+  # Treatment definition
+  early_window_days: 90  # Days after t₀ for early dialysis
+
+  # Survival outcomes
+  study_end_date: "2023-12-31"
+  max_followup_days: 1825  # 5 years
+
+# Feature extraction parameters
+features:
+  # Lookback windows
+  lab_lookback_days: 90  # 90 days for lab values
+  cci_lookback_years: 5  # 5 years for comorbidities
+
+  # UACR derivation
+  derive_uacr_from_upcr: true
+
+  # Lab features to extract
+  lab_features:
+    - creatinine
+    - hemoglobin
+    - albumin
+    - a1c
+    - phosphate
+    - calcium
+    - bicarbonate
+    - uacr
+
+# Data splitting parameters
+splitting:
+  temporal_test_start: "2022-01-01"  # Temporal test: t₀ ≥ 2022-01-01
+  spatial_test_frac: 0.10  # Spatial test: random 10% of remaining
+  random_seed: 42
+
+# Imputation parameters
+imputation:
+  method: mice  # Multiple Imputation by Chained Equations
+  max_iter: 10
+  estimator: extratrees  # ExtraTreesRegressor
+  random_seed: 42
+
+  # Hard truth columns (no imputation)
+  hard_truth:
+    - key
+    - gender
+    - A
+    - duration
+    - event
+
+  # Medical history columns (no imputation for binary CCI flags)
+  med_history_pattern: "^(myocardial|congestive|peripheral|cerebrovascular|dementia|copd|rheumatic|peptic|liver|diabetes|hemiplegia|renal|cancer|metastatic|aids)"
+
+# Preprocessing parameters
+preprocessing:
+  # Log transformation (for skewed features)
+  log_transform_features:
+    - creatinine
+    - phosphate
+    - uacr
+  log_transform_threshold: 1.0  # |skewness| > 1.0
+
+  # Min-max scaling (all continuous features)
+  scaling_method: minmax
+  scaling_range: [0, 1]
+
+  # CCI binarization (>0 → 1)
+  binarize_cci: true
+
+# Cross-validation parameters
+cv:
+  method: kfold
+  n_folds: 10
+  random_seed: 42
+
+# Hyperparameter optimization
+tuning:
+  engine: optuna
+  n_trials: 50
+  timeout: 3600  # 1 hour
+  pruner: median
+
+  # Hyperparameter search spaces
+  learning_rate: [0.0001, 0.01]  # log scale
+  hidden_layers:
+    - [128, 64]
+    - [256, 128, 64]
+    - [128, 64, 32]
+    - [256, 128]
+  dropout: [0.1, 0.5]
+  batch_size: [128, 256, 512]
+  weight_decay: [0.0, 0.001]
+
+# Model training parameters
+model:
+  architecture: mlp
+  hidden_layers: [128, 64, 32]
+  dropout: 0.3
+  batch_norm: true
+
+  # Optimizer
+  optimizer: adam
+  learning_rate: 0.001
+  weight_decay: 0.0
+
+  # Training
+  epochs: 100
+  batch_size: 256
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+
+  # Loss function
+  loss: cox_ph  # Cox Proportional Hazards
+
+  # Device
+  device: cuda  # Use GPU if available
+
+# S-learner specific parameters
+s_learner:
+  enabled: true
+  include_treatment_as_feature: true  # A as feature
+
+# Evaluation parameters
+evaluation:
+  # Time points for evaluation (days)
+  time_points: [365, 1095, 1825]  # 1, 3, 5 years
+
+  # Predictive metrics
+  metrics:
+    - cindex  # Concordance index
+    - brier  # Integrated Brier score
+    - calibration  # Calibration curves
+    - log_likelihood  # Partial log-likelihood
+
+  # Causal metrics
+  causal_metrics:
+    - ate  # Average Treatment Effect
+    - att  # Average Treatment on Treated
+
+  # Bootstrap for confidence intervals
+  bootstrap:
+    enabled: true
+    n_bootstrap: 1000
+    confidence_level: 0.95
+    random_seed: 42
+
+  # Plots
+  generate_plots:
+    - calibration_curves
+    - survival_curves
+    - risk_difference_distribution
+
+# MLflow tracking
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: prism_s_learner
+  log_models: true
+  log_artifacts: true
+
+# Output paths
+output:
+  model_dir: "models/s_learner"
+  results_dir: "results/s_learner"
+  plots_dir: "results/s_learner/plots"
+  preprocessing_path: "models/s_learner/preprocessing_pipeline.pkl"

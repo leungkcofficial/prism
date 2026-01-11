@@ -1,0 +1,213 @@
+# PRISM DR-Learner Configuration
+# Doubly Robust learner with propensity score weighting
+
+project:
+  name: prism
+  mode: dr_learner
+  model_type: deepsurv
+  experiment_name: prism_dr_learner
+
+# Cohort formation parameters (same as other learners)
+cohort:
+  egfr_screen_lt15_min_days: 90
+  egfr_screen_lt15_max_days: 365
+  t0_threshold: 10.0
+  outpatient_only: true
+  require_confirmatory_egfr: false
+  early_window_days: 90
+  study_end_date: "2023-12-31"
+  max_followup_days: 1825
+
+# Feature extraction parameters (same as other learners)
+features:
+  lab_lookback_days: 90
+  cci_lookback_years: 5
+  derive_uacr_from_upcr: true
+  lab_features:
+    - creatinine
+    - hemoglobin
+    - albumin
+    - a1c
+    - phosphate
+    - calcium
+    - bicarbonate
+    - uacr
+
+# Data splitting parameters (same as other learners)
+splitting:
+  temporal_test_start: "2022-01-01"
+  spatial_test_frac: 0.10
+  random_seed: 42
+
+# Imputation parameters (same as other learners)
+imputation:
+  method: mice
+  max_iter: 10
+  estimator: extratrees
+  random_seed: 42
+  hard_truth:
+    - key
+    - gender
+    - A
+    - duration
+    - event
+  med_history_pattern: "^(myocardial|congestive|peripheral|cerebrovascular|dementia|copd|rheumatic|peptic|liver|diabetes|hemiplegia|renal|cancer|metastatic|aids)"
+
+# Preprocessing parameters (same as other learners)
+preprocessing:
+  log_transform_features:
+    - creatinine
+    - phosphate
+    - uacr
+  log_transform_threshold: 1.0
+  scaling_method: minmax
+  scaling_range: [0, 1]
+  binarize_cci: true
+
+# Cross-validation parameters (same as other learners)
+cv:
+  method: kfold
+  n_folds: 10
+  random_seed: 42
+
+# Hyperparameter optimization (same as other learners)
+tuning:
+  engine: optuna
+  n_trials: 50
+  timeout: 3600
+  pruner: median
+  learning_rate: [0.0001, 0.01]
+  hidden_layers:
+    - [128, 64]
+    - [256, 128, 64]
+    - [128, 64, 32]
+    - [256, 128]
+  dropout: [0.1, 0.5]
+  batch_size: [128, 256, 512]
+  weight_decay: [0.0, 0.001]
+
+# Model training parameters (same as other learners)
+model:
+  architecture: mlp
+  hidden_layers: [128, 64, 32]
+  dropout: 0.3
+  batch_norm: true
+  optimizer: adam
+  learning_rate: 0.001
+  weight_decay: 0.0
+  epochs: 100
+  batch_size: 256
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 0.001
+  loss: cox_ph
+  device: cuda
+
+# DR-learner specific parameters
+dr_learner:
+  enabled: true
+  include_treatment_as_feature: true  # A as feature in survival model
+
+  # Propensity score model
+  propensity_model:
+    model_type: gbdt  # Options: logistic, gbdt, xgboost, neural
+
+    # GBDT-specific parameters
+    gbdt:
+      n_estimators: 100
+      max_depth: 5
+      learning_rate: 0.1
+      min_samples_split: 20
+      min_samples_leaf: 10
+      random_seed: 42
+
+    # Logistic regression parameters (alternative)
+    logistic:
+      penalty: l2
+      C: 1.0
+      max_iter: 1000
+      random_seed: 42
+
+  # IPTW (Inverse Probability of Treatment Weighting) parameters
+  iptw:
+    # Propensity score trimming/clipping
+    clip_min: 0.05  # Trim at 5th percentile
+    clip_max: 0.95  # Trim at 95th percentile
+
+    # Stabilized weights
+    use_stabilized_weights: true
+
+    # Weight normalization
+    normalize_weights: true
+
+    # Maximum weight (cap extreme weights)
+    max_weight: 50.0
+
+    # Diagnostics
+    check_overlap: true  # Check positivity assumption
+    save_propensity_dist: true  # Save propensity distribution plots
+
+  # Balance diagnostics
+  balance:
+    # Standardized Mean Difference (SMD) thresholds
+    smd_threshold: 0.1  # Warn if |SMD| > 0.1 after weighting
+
+    # Features to check for balance
+    check_all_features: true
+
+    # Save balance plots
+    save_balance_plots: true
+
+# Evaluation parameters (extended for DR-learner)
+evaluation:
+  time_points: [365, 1095, 1825]
+  metrics:
+    - cindex
+    - brier
+    - calibration
+    - log_likelihood
+  causal_metrics:
+    - ate
+    - att
+  bootstrap:
+    enabled: true
+    n_bootstrap: 1000
+    confidence_level: 0.95
+    random_seed: 42
+  generate_plots:
+    - calibration_curves
+    - survival_curves
+    - risk_difference_distribution
+    - propensity_overlap  # DR-specific
+    - balance_plots  # DR-specific
+
+  # DR-specific diagnostics
+  dr_diagnostics:
+    - propensity_distribution
+    - weight_distribution
+    - overlap_histogram
+    - smd_before_after_weighting
+    - love_plot  # Balance plot
+
+# MLflow tracking
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: prism_dr_learner
+  log_models: true
+  log_artifacts: true
+
+  # Log propensity model separately
+  log_propensity_model: true
+
+# Output paths
+output:
+  model_dir: "models/dr_learner"
+  results_dir: "results/dr_learner"
+  plots_dir: "results/dr_learner/plots"
+  preprocessing_path: "models/dr_learner/preprocessing_pipeline.pkl"
+  survival_model_path: "models/dr_learner/survival_model.pth"
+  propensity_model_path: "models/dr_learner/propensity_model.pkl"
+  propensity_scores_path: "models/dr_learner/propensity_scores.csv"
+  iptw_weights_path: "models/dr_learner/iptw_weights.csv"
+  balance_metrics_path: "results/dr_learner/balance_smd.csv"

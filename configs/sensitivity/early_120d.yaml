@@ -1,0 +1,68 @@
+# PRISM Sensitivity Analysis: Early Dialysis Window = 120 days
+# Tests impact of longer early dialysis definition
+
+project:
+  name: prism_sensitivity
+  mode: s_learner
+  model_type: deepsurv
+  experiment_name: prism_sensitivity_early120d
+
+cohort:
+  egfr_screen_lt15_min_days: 90
+  egfr_screen_lt15_max_days: 365
+  t0_threshold: 10.0
+  outpatient_only: true
+  require_confirmatory_egfr: false
+  early_window_days: 120  # CHANGED: 120 days instead of 90
+  study_end_date: "2023-12-31"
+  max_followup_days: 1825
+
+features:
+  lab_lookback_days: 90
+  cci_lookback_years: 5
+  derive_uacr_from_upcr: true
+  lab_features:
+    - creatinine
+    - hemoglobin
+    - albumin
+    - a1c
+    - phosphate
+    - calcium
+    - bicarbonate
+    - uacr
+
+splitting:
+  temporal_test_start: "2022-01-01"
+  spatial_test_frac: 0.10
+  random_seed: 42
+
+imputation:
+  method: mice
+  max_iter: 10
+  estimator: extratrees
+  random_seed: 42
+
+preprocessing:
+  log_transform_features:
+    - creatinine
+    - phosphate
+    - uacr
+  scaling_method: minmax
+  binarize_cci: true
+
+model:
+  architecture: mlp
+  hidden_layers: [128, 64, 32]
+  dropout: 0.3
+  learning_rate: 0.001
+  epochs: 100
+  batch_size: 256
+  device: cuda
+
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: prism_sensitivity_early120d
+
+output:
+  model_dir: "models/sensitivity/early_120d"
+  results_dir: "results/sensitivity/early_120d"
