@@ -282,6 +282,87 @@ def test_feature_extraction(data, cohort_df):
         return None
 
 
+def test_preprocessing(cohort_df, features_df):
+    """Test preprocessing with MICE imputation, log transformation, and scaling"""
+    logger.info("\n" + "=" * 80)
+    logger.info("TEST: PREPROCESSING")
+    logger.info("=" * 80)
+
+    if cohort_df is None or features_df is None or cohort_df.empty or features_df.empty:
+        logger.error("Skipping - no cohort or features available")
+        return None
+
+    try:
+        import os
+        from src.ckd_preprocessor import CKDPreprocessor
+
+        logger.info(f"\nInput data:")
+        logger.info(f"  Cohort: {cohort_df.shape}")
+        logger.info(f"  Features: {features_df.shape}")
+
+        # Merge cohort and features
+        logger.info("\nMerging cohort and features...")
+        master_df = cohort_df.merge(features_df, on='key', how='inner')
+        logger.info(f"✓ Merged master_df: {master_df.shape}")
+        logger.info(f"  Columns: {list(master_df.columns)}")
+
+        # Check missing values before preprocessing
+        logger.info(f"\nMissing values before preprocessing:")
+        missing_counts = master_df.isnull().sum()
+        for col, count in missing_counts[missing_counts > 0].items():
+            pct = count / len(master_df) * 100
+            logger.info(f"  {col}: {count} ({pct:.1f}%)")
+
+        # Configure environment variables to match our column names
+        logger.info("\nConfiguring column mappings for PRISM data...")
+        os.environ['HARD_TRUTH_COLUMNS'] = 'gender,event,t0_date'
+        os.environ['LAB_COLUMNS'] = 'creatinine_at_t0,hemoglobin_at_t0,albumin_at_t0,a1c_at_t0,phosphate_at_t0,calcium_at_t0,bicarbonate_at_t0,uacr_at_t0'
+        os.environ['NUMERICAL_COLUMNS'] = 'age_at_t0,duration,creatinine_at_t0,hemoglobin_at_t0,albumin_at_t0,a1c_at_t0,phosphate_at_t0,calcium_at_t0,bicarbonate_at_t0,uacr_at_t0,cci_score_total,time_since_ckd_days'
+        os.environ['CATEGORICAL_COLUMNS'] = 'gender,A,event'
+        # Medical history columns are auto-detected from comorbidity flags
+
+        # Initialize preprocessor
+        logger.info("\nInitializing CKDPreprocessor...")
+        preprocessor = CKDPreprocessor()
+
+        # Fit preprocessor on master_df
+        logger.info("\nFitting preprocessor...")
+        preprocessor.fit(master_df, random_seed=42)
+
+        logger.info(f"\n✓ Preprocessing fit complete!")
+
+        # Get preprocessing info
+        info = preprocessor.get_preprocessing_info()
+        logger.info(f"\nPreprocessing summary:")
+        logger.info(f"  Total features: {info['n_features']}")
+        logger.info(f"  MICE fitted: {info['imputation']['mice_fitted']}")
+        logger.info(f"  Log transformed: {info['transformations']['n_log_transformed']}")
+        logger.info(f"  MinMax scaled: {info['transformations']['n_minmax_scaled']}")
+
+        # Transform the data
+        logger.info("\nTransforming data...")
+        master_processed = preprocessor.transform(master_df)
+
+        logger.info(f"\n✓ Data transformation complete!")
+        logger.info(f"  Processed shape: {master_processed.shape}")
+
+        # Check missing values after preprocessing
+        missing_after = master_processed.isnull().sum().sum()
+        logger.info(f"\nMissing values after preprocessing: {missing_after}")
+
+        # Show sample of processed data
+        logger.info(f"\nProcessed data sample:")
+        logger.info(master_processed.head())
+
+        return master_processed
+
+    except Exception as e:
+        logger.error(f"✗ Preprocessing failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def main():
     """Run tests"""
     logger.info("PRISM CORE MODULE TESTING")
@@ -292,6 +373,7 @@ def main():
 
     cohort_df = None
     features_df = None
+    master_processed = None
 
     if data:
         # Test 2: Cohort formation
@@ -300,6 +382,10 @@ def main():
         if cohort_df is not None and not cohort_df.empty:
             # Test 3: Feature extraction
             features_df = test_feature_extraction(data, cohort_df)
+
+            if features_df is not None and not features_df.empty:
+                # Test 4: Preprocessing
+                master_processed = test_preprocessing(cohort_df, features_df)
 
     logger.info("\n" + "=" * 80)
     logger.info("TESTING COMPLETE")

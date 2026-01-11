@@ -179,9 +179,15 @@ class CKDPreprocessor:
         if lab_cols_with_missing:
             # Get numeric columns for MICE imputation
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-            exclude_cols = ['key', 'endpoint', 'endpoint_renal', 'endpoint_death', 'endpoint_censored']
+            # Exclude datetime columns (which might appear as numeric)
+            datetime_cols = df.select_dtypes(include=['datetime', 'datetime64']).columns.tolist()
+            exclude_cols = ['key', 'endpoint', 'endpoint_renal', 'endpoint_death', 'endpoint_censored'] + datetime_cols
             self.impute_cols = [col for col in numeric_cols if col not in exclude_cols]
-            
+
+            # Filter out columns that are 100% missing (MICE can't impute these)
+            self.impute_cols = [col for col in self.impute_cols
+                               if col in df.columns and df[col].notna().sum() > 0]
+
             # Create imputation dataframe
             impute_df = df[self.impute_cols].copy()
             
@@ -244,20 +250,21 @@ class CKDPreprocessor:
         # Apply MICE imputation if available
         if self.mice_imputer is not None and self.mice_scaler is not None and self.impute_cols is not None:
             # Check if any lab columns have missing values
-            lab_cols_missing = [col for col in self.lab_columns 
+            lab_cols_missing = [col for col in self.lab_columns
                                if col in df_imputed.columns and df_imputed[col].isna().any()]
-            
+
             if lab_cols_missing:
                 # Create imputation dataframe
                 impute_df = df_imputed[self.impute_cols].copy()
-                
+
                 # Scale data
+                scaled_array = self.mice_scaler.transform(impute_df)
                 impute_df_scaled = pd.DataFrame(
-                    self.mice_scaler.transform(impute_df),
+                    scaled_array,
                     columns=impute_df.columns,
                     index=impute_df.index
                 )
-                
+
                 # Apply MICE
                 imputed_values = self.mice_imputer.transform(impute_df_scaled)
                 
@@ -345,33 +352,33 @@ class CKDPreprocessor:
         
         # Apply imputation
         df = self._apply_imputation(df)
-        
-        # Process CCI columns (binarization)
+
+        # Calculate derived features (before transformations)
+        if self.feature_engineering_enabled:
+            df = self._calculate_derived_features(df)
+
+        # Apply log transformations (BEFORE categorical conversion)
+        for col, shift in self.log_transform_params:
+            if col in df.columns:
+                df[col] = np.log(df[col] + shift)
+
+        # Apply MinMax scaling (BEFORE categorical conversion)
+        for col, scaler in self.minmax_scalers.items():
+            if col in df.columns:
+                df[col] = scaler.transform(df[col].values.reshape(-1, 1)).flatten()
+
+        # Process CCI columns (binarization) - AFTER transformations
         for col in self.cci_columns:
             if col in df.columns:
                 df[col] = df[col].apply(lambda x: 1 if x > 0 else 0)
                 df[col] = df[col].astype('category')
-        
-        # Process other categorical features
+
+        # Process other categorical features - AFTER transformations
         for col in self.categorical_columns:
             if col in df.columns and col not in self.cci_columns:
                 if df[col].nunique() <= 2:
                     df[col] = df[col].apply(lambda x: 1 if x and x > 0 else 0)
                 df[col] = df[col].astype('category')
-        
-        # Calculate derived features
-        if self.feature_engineering_enabled:
-            df = self._calculate_derived_features(df)
-        
-        # Apply log transformations
-        for col, shift in self.log_transform_params:
-            if col in df.columns:
-                df[col] = np.log(df[col] + shift)
-        
-        # Apply MinMax scaling
-        for col, scaler in self.minmax_scalers.items():
-            if col in df.columns:
-                df[col] = scaler.transform(df[col].values.reshape(-1, 1)).flatten()
         
         return df
     
