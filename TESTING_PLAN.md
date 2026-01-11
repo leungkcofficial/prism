@@ -13,20 +13,34 @@ We will test the pipeline step-by-step, starting from data ingestion through to 
 
 ## Phase 1: Module-Level Testing
 
-### ✅ Test 1: Data Ingestion (Existing)
+### ✅ Test 1: Data Ingestion - PASSED ✓
 **Module**: `steps/ingest_data.py`
-**Status**: Should work (existing from previous project)
+**Status**: Working correctly
+**Results**:
+- Creatinine: 2,784,974 rows (236,165 unique patients)
+- Operations: 44,871 rows (1,038 dialysis operations)
+- Deaths: 74,545 rows
+
 **Test**:
 ```python
-from steps.ingest_data import ingest_data
-lab_dfs = ingest_data()
-print(f"Keys: {lab_dfs.keys()}")
-print(f"Creatinine shape: {lab_dfs['cr_df'].shape}")
+from steps.ingest_data import load_lab_data, load_clinical_data
+cr_df, demographics_df = load_lab_data('creatinine')
+operation_df = load_clinical_data('operation')
+death_df = load_clinical_data('death')
 ```
 
-### 🔄 Test 2: Cohort Formation
+### ✅ Test 2: Cohort Formation - PASSED ✓
 **Module**: `src/cohort_builder.py`, `steps/form_cohort.py`
+**Status**: Working correctly
 **Dependencies**: creatinine (for eGFR), operation_df, death_df
+**Results** (5,000 record test):
+- eGFR calculated: 2,708,076 rows (97% success rate)
+- CKD Stage 5: 174,565 patients
+- Persistent eGFR <15: 50 patients
+- t₀ defined: 44 patients
+- Early dialysis: 0, Non-early: 44
+- Deaths: 25 (56.8% event rate)
+
 **Test**:
 ```python
 from src.cohort_builder import CohortBuilder
@@ -184,15 +198,15 @@ python scripts/run_prism.py --config configs/dr_learner.yaml
 
 ### Before Testing
 - [x] Code pushed to GitHub
-- [ ] Python environment set up
-- [ ] Dependencies installed
-- [ ] Data files available
+- [x] Python environment set up
+- [x] Dependencies installed
+- [x] Data files available
 
 ### During Testing
-- [ ] Test each module independently
-- [ ] Document all errors
-- [ ] Fix errors incrementally
-- [ ] Re-test after fixes
+- [x] Test each module independently
+- [x] Document all errors
+- [x] Fix errors incrementally
+- [x] Re-test after fixes
 
 ### After Testing
 - [ ] All modules pass unit tests

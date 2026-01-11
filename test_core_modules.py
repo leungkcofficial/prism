@@ -37,27 +37,36 @@ def test_data_loading():
     logger.info("=" * 80)
 
     try:
-        # Import data ingestion modules
-        from src.data_ingester import DataIngester
-        from src.lab_result_mapper import StandardLabResultMapper
+        # Use the load_lab_data function from ingest_data.py
+        import sys
+        sys.path.insert(0, 'steps')
+        from ingest_data import load_lab_data, load_clinical_data
 
-        # Try loading creatinine data
+        # Load creatinine data (includes demographics)
         logger.info("\nLoading creatinine data...")
-        ingester = DataIngester(
-            data_type='creatinine',
-            data_path='data/Cr',
-            validation_rules_path='src/default_data_validation_rules.yml'
-        )
-
-        cr_df, demographics_df = ingester.load_data()
+        cr_df, demographics_df = load_lab_data('creatinine')
 
         logger.info(f"✓ Creatinine loaded: {cr_df.shape}")
         logger.info(f"  Columns: {list(cr_df.columns)}")
-        logger.info(f"  Demographics: {demographics_df.shape}")
-        logger.info(f"\nFirst few rows:")
+        logger.info(f"  Demographics: {demographics_df.shape if demographics_df is not None else 'N/A'}")
+        logger.info(f"\nFirst few rows of creatinine:")
         logger.info(cr_df.head())
 
-        return {'cr_df': cr_df, 'demographics_df': demographics_df}
+        # Load clinical data
+        logger.info("\nLoading operation data...")
+        operation_df = load_clinical_data('operation')
+        logger.info(f"✓ Operation data: {operation_df.shape}")
+
+        logger.info("\nLoading death data...")
+        death_df = load_clinical_data('death')
+        logger.info(f"✓ Death data: {death_df.shape}")
+
+        return {
+            'cr_df': cr_df,
+            'demographics_df': demographics_df,
+            'operation_df': operation_df,
+            'death_df': death_df
+        }
 
     except Exception as e:
         logger.error(f"✗ Data loading failed: {e}")
@@ -66,13 +75,13 @@ def test_data_loading():
         return None
 
 
-def test_cohort_formation(cr_df):
+def test_cohort_formation(data):
     """Test cohort formation with sample data"""
     logger.info("\n" + "=" * 80)
     logger.info("TEST: COHORT FORMATION")
     logger.info("=" * 80)
 
-    if cr_df is None:
+    if data is None or 'cr_df' not in data:
         logger.error("Skipping - no data available")
         return None
 
@@ -80,51 +89,74 @@ def test_cohort_formation(cr_df):
         from src.cohort_builder import CohortBuilder
         from src.data_cleaning import calculate_egfr
 
-        logger.info(f"\nInput creatinine data: {cr_df.shape}")
-        logger.info(f"  Columns: {list(cr_df.columns)}")
+        cr_df = data['cr_df']
+        demographics_df = data['demographics_df']
+        operation_df = data['operation_df']
+        death_df = data['death_df']
+
+        logger.info(f"\nInput data:")
+        logger.info(f"  Creatinine: {cr_df.shape}")
+        logger.info(f"  Demographics: {demographics_df.shape if demographics_df is not None else 'N/A'}")
+        logger.info(f"  Operations: {operation_df.shape}")
+        logger.info(f"  Deaths: {death_df.shape}")
+        logger.info(f"\nCreatinine columns: {list(cr_df.columns)}")
 
         # Check if eGFR needs to be calculated
         if 'egfr' not in cr_df.columns:
             logger.info("\neGFR column not found - attempting to calculate...")
 
-            # Check required columns
-            required = ['creatinine', 'age', 'gender']
-            missing = [col for col in required if col not in cr_df.columns]
+            # Prepare data for eGFR calculation
+            # The calculate_egfr() function expects:
+            # - cr_df with columns: key, date, creatinine (renamed from result_value)
+            # - demo_df with columns: key, dob, gender
 
-            if missing:
-                logger.error(f"Cannot calculate eGFR - missing columns: {missing}")
+            # Note: Our cr_df already contains dob and gender columns
+            # So we can extract demographics from cr_df itself
+
+            # Prepare creatinine DataFrame for eGFR calculation
+            if 'result_value' in cr_df.columns:
+                # Create a copy with only the required columns (key, date, creatinine)
+                # Remove dob and gender so calculate_egfr can merge them properly
+                cr_df_egfr = cr_df[['key', 'date', 'result_value', 'code']].copy()
+                cr_df_egfr['creatinine'] = cr_df_egfr['result_value']
+                logger.info("Prepared creatinine data with columns: key, date, creatinine")
+            else:
+                logger.error(f"Cannot calculate eGFR - 'result_value' column not found")
                 logger.info(f"Available columns: {list(cr_df.columns)}")
                 return None
 
-            logger.info("Calculating eGFR...")
-            cr_df = calculate_egfr(cr_df)
+            # Extract demographics from creatinine DataFrame
+            # (demographics are already merged into cr_df by the data mapper)
+            if 'dob' in cr_df.columns and 'gender' in cr_df.columns:
+                demo_df_for_egfr = cr_df[['key', 'dob', 'gender']].drop_duplicates(subset=['key']).copy()
+
+                # Convert gender to numeric: F->0 (female), M->1 (male)
+                # The calculate_egfr function expects 0 for female and 1 for male
+                gender_map = {'F': 0, 'M': 1}
+                demo_df_for_egfr['gender'] = demo_df_for_egfr['gender'].map(gender_map)
+
+                logger.info(f"Extracted demographics from creatinine data: {demo_df_for_egfr.shape}")
+                logger.info(f"Gender encoding: {demo_df_for_egfr['gender'].value_counts().to_dict()}")
+            else:
+                logger.error("Cannot calculate eGFR - dob or gender columns not in creatinine data")
+                return None
+
+            logger.info("Calculating eGFR (this may take a few minutes)...")
+            # calculate_egfr merges demo_df internally and calculates age from dob
+            cr_df = calculate_egfr(cr_df_egfr, demo_df_for_egfr)
             logger.info(f"✓ eGFR calculated")
 
-        # For testing, create minimal mock dataframes for operation and death
-        logger.info("\nCreating mock operation_df and death_df for testing...")
+            if 'egfr' in cr_df.columns:
+                logger.info(f"  eGFR stats: min={cr_df['egfr'].min():.1f}, max={cr_df['egfr'].max():.1f}, mean={cr_df['egfr'].mean():.1f}")
+            else:
+                logger.error("eGFR column still not found after calculation!")
+                return None
 
-        # Get unique patient keys from cr_df
-        unique_keys = cr_df['key'].unique()[:100]  # Test with first 100 patients
-
-        # Mock operation_df
-        operation_df = pd.DataFrame({
-            'key': unique_keys[:10],  # 10 patients have dialysis
-            'date': pd.to_datetime('2020-01-01'),
-            'is_dialysis': True
-        })
-
-        # Mock death_df
-        death_df = pd.DataFrame({
-            'key': unique_keys[:5],  # 5 patients died
-            'death_date': pd.to_datetime('2021-01-01')
-        })
-
-        logger.info(f"  Mock operation_df: {operation_df.shape}")
-        logger.info(f"  Mock death_df: {death_df.shape}")
-
-        # Filter cr_df to test subset
-        cr_df_test = cr_df[cr_df['key'].isin(unique_keys)].copy()
-        logger.info(f"\nTest subset: {cr_df_test.shape}")
+        # Use a test subset for speed
+        logger.info("\nUsing subset for testing (first 5000 creatinine records)...")
+        cr_df_test = cr_df.head(5000).copy()
+        unique_keys = cr_df_test['key'].unique()
+        logger.info(f"Test subset: {cr_df_test.shape}, {len(unique_keys)} unique patients")
 
         # Initialize cohort builder
         logger.info("\nInitializing CohortBuilder...")
@@ -168,10 +200,8 @@ def main():
     data = test_data_loading()
 
     if data:
-        cr_df = data['cr_df']
-
         # Test 2: Cohort formation
-        cohort_df = test_cohort_formation(cr_df)
+        cohort_df = test_cohort_formation(data)
 
     logger.info("\n" + "=" * 80)
     logger.info("TESTING COMPLETE")
