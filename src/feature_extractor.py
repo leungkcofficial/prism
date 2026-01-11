@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 import logging
 
 # Import existing data processing utilities
-from src.dx_ingester import DxIngester
+from src.dx_ingester import ICD10Ingester
 from src.lab_result_mapper import UrineLabResultMapper
 
 # Set up logging
@@ -172,13 +172,43 @@ class FeatureExtractor:
         Uses pandas merge_asof for efficient temporal join.
         """
         # Prepare lab data
-        lab_subset = lab_df[['key', 'date', 'value']].copy()
-        lab_subset = lab_subset.sort_values(['key', 'date'])
-        lab_subset = lab_subset.rename(columns={'value': f'{lab_name}_at_t0'})
+        # Check if column is named 'value' or 'result_value'
+        value_col = 'value' if 'value' in lab_df.columns else 'result_value'
+        lab_subset = lab_df[['key', 'date', value_col]].copy()
+
+        # Remove rows with null key or date values (required for merge_asof)
+        lab_subset = lab_subset.dropna(subset=['key', 'date'])
+
+        # Ensure 'key' is int64 (required for merge - must match across dataframes)
+        lab_subset['key'] = lab_subset['key'].astype('int64')
+
+        # Ensure date columns are datetime
+        lab_subset['date'] = pd.to_datetime(lab_subset['date'], errors='coerce')
+
+        # Remove any rows that became null after datetime conversion
+        lab_subset = lab_subset.dropna(subset=['date'])
+
+        # Sort by date only (not by key!) for merge_asof
+        lab_subset = lab_subset.sort_values('date').reset_index(drop=True)
+        lab_subset = lab_subset.rename(columns={value_col: f'{lab_name}_at_t0'})
 
         # Prepare features data
         features_subset = features_df[['key', 't0_date']].copy()
-        features_subset = features_subset.sort_values(['key', 't0_date'])
+
+        # Remove rows with null key or t0_date values (required for merge_asof)
+        features_subset = features_subset.dropna(subset=['key', 't0_date'])
+
+        # Ensure 'key' is int64 (required for merge - must match across dataframes)
+        features_subset['key'] = features_subset['key'].astype('int64')
+
+        # Ensure t0_date is datetime
+        features_subset['t0_date'] = pd.to_datetime(features_subset['t0_date'], errors='coerce')
+
+        # Remove any rows that became null after datetime conversion
+        features_subset = features_subset.dropna(subset=['t0_date'])
+
+        # Sort by t0_date only (not by key!) for merge_asof
+        features_subset = features_subset.sort_values('t0_date').reset_index(drop=True)
 
         # Calculate lookback start date
         features_subset['lookback_start'] = features_subset['t0_date'] - timedelta(days=self.lab_lookback_days)
@@ -268,7 +298,7 @@ class FeatureExtractor:
         """
         Extract Charlson Comorbidity Index features with 5-year lookback.
 
-        Uses existing DxIngester to process ICD-10 codes.
+        Uses existing ICD10Ingester to process ICD-10 codes.
         """
         logger.info(f"  - Extracting CCI features (5-year lookback)...")
 
@@ -292,8 +322,8 @@ class FeatureExtractor:
             ]
 
             if len(patient_icd10) > 0:
-                # Use DxIngester to compute CCI
-                dx_ingester = DxIngester()
+                # Use ICD10Ingester to compute CCI
+                dx_ingester = ICD10Ingester()
                 cci_result = dx_ingester.process_patient_diagnoses(patient_icd10)
 
                 # Update features

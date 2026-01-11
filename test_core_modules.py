@@ -191,6 +191,97 @@ def test_cohort_formation(data):
         return None
 
 
+def test_feature_extraction(data, cohort_df):
+    """Test feature extraction with lookback windows"""
+    logger.info("\n" + "=" * 80)
+    logger.info("TEST: FEATURE EXTRACTION")
+    logger.info("=" * 80)
+
+    if cohort_df is None or cohort_df.empty:
+        logger.error("Skipping - no cohort available")
+        return None
+
+    try:
+        from src.feature_extractor import FeatureExtractor
+        import sys
+        sys.path.insert(0, 'steps')
+        from ingest_data import load_lab_data, load_clinical_data
+
+        logger.info(f"\nCohort size: {len(cohort_df)}")
+        logger.info(f"Cohort columns: {list(cohort_df.columns)}")
+
+        # Load all lab data needed for features
+        logger.info("\nLoading lab data for feature extraction...")
+
+        lab_dfs = {}
+        lab_types = ['hemoglobin', 'albumin', 'hemoglobin_a1c', 'phosphate',
+                     'calcium', 'bicarbonate', 'urine_albumin_creatinine_ratio']
+
+        # Add creatinine (already loaded with eGFR)
+        lab_dfs['creatinine'] = data['cr_df']
+
+        for lab_type in lab_types:
+            logger.info(f"  Loading {lab_type}...")
+            lab_df, _ = load_lab_data(lab_type)
+
+            # Map lab type names to feature names
+            if lab_type == 'hemoglobin':
+                lab_dfs['hemoglobin'] = lab_df
+            elif lab_type == 'albumin':
+                lab_dfs['albumin'] = lab_df
+            elif lab_type == 'hemoglobin_a1c':
+                lab_dfs['a1c'] = lab_df
+            elif lab_type == 'phosphate':
+                lab_dfs['phosphate'] = lab_df
+            elif lab_type == 'calcium':
+                lab_dfs['calcium'] = lab_df
+            elif lab_type == 'bicarbonate':
+                lab_dfs['bicarbonate'] = lab_df
+            elif lab_type == 'urine_albumin_creatinine_ratio':
+                lab_dfs['uacr'] = lab_df
+
+            logger.info(f"    ✓ {lab_type}: {lab_df.shape}")
+
+        # Load ICD-10 data for CCI calculation
+        logger.info("\nLoading ICD-10 diagnosis data...")
+        icd10_df = load_clinical_data('icd10')
+        logger.info(f"✓ ICD-10 data: {icd10_df.shape}")
+
+        # Initialize feature extractor
+        logger.info("\nInitializing FeatureExtractor...")
+        extractor = FeatureExtractor(
+            lab_lookback_days=90,
+            cci_lookback_years=5,
+            derive_uacr_from_upcr=True
+        )
+
+        # Extract features
+        logger.info("\nExtracting features with lookback windows...")
+        features_df = extractor.extract(cohort_df, lab_dfs, icd10_df)
+
+        logger.info(f"\n✓ Feature extraction successful!")
+        logger.info(f"  Features extracted: {len(features_df.columns)}")
+        logger.info(f"  Rows: {len(features_df)}")
+        logger.info(f"\nFeature columns: {list(features_df.columns)}")
+        logger.info(f"\nFeature sample:")
+        logger.info(features_df.head())
+
+        # Check missing value rates
+        missing_rates = (features_df.isnull().sum() / len(features_df) * 100).sort_values(ascending=False)
+        logger.info(f"\nMissing value rates (%):")
+        for col, rate in missing_rates.items():
+            if rate > 0:
+                logger.info(f"  {col}: {rate:.1f}%")
+
+        return features_df
+
+    except Exception as e:
+        logger.error(f"✗ Feature extraction failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def main():
     """Run tests"""
     logger.info("PRISM CORE MODULE TESTING")
@@ -199,9 +290,16 @@ def main():
     # Test 1: Data loading
     data = test_data_loading()
 
+    cohort_df = None
+    features_df = None
+
     if data:
         # Test 2: Cohort formation
         cohort_df = test_cohort_formation(data)
+
+        if cohort_df is not None and not cohort_df.empty:
+            # Test 3: Feature extraction
+            features_df = test_feature_extraction(data, cohort_df)
 
     logger.info("\n" + "=" * 80)
     logger.info("TESTING COMPLETE")
