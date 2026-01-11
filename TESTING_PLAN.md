@@ -81,19 +81,33 @@ print(features_df.head())
 print(f"Features: {len(features_df.columns)}")
 ```
 
-### 🔄 Test 4: Preprocessing
+### ✅ Test 4: Preprocessing - PASSED ✓
 **Module**: `src/ckd_preprocessor.py`, `steps/preprocess_data.py`
+**Status**: Working correctly
 **Dependencies**: master_df (merged cohort + features)
+**Results** (44 patients):
+- **MICE Imputation**: Successfully fitted on 32 numeric columns
+  - Excluded datetime columns (t0_date)
+  - Excluded 100% missing columns (calcium_at_t0, time_since_ckd_days)
+  - Imputed 8 lab features with missing values
+- **Log Transformation**: 2 skewed features transformed
+  - Applied to features with |skewness| > 1.0
+- **MinMax Scaling**: 10 features scaled to [0, 1]
+- **Categorical Conversion**: 20 CCI flags + 3 categorical features
+
 **Test**:
 ```python
 from src.ckd_preprocessor import CKDPreprocessor
 preprocessor = CKDPreprocessor()
-train_processed = preprocessor.fit_transform(train_df)
+preprocessor.fit(master_df, random_seed=42)
+master_processed = preprocessor.transform(master_df)
 ```
 
-**Expected Issues**:
-- Column type mismatches
-- MICE imputation may need tuning
+**Fixes Applied**:
+1. Configured environment variables to match PRISM column names (_at_t0 suffix)
+2. Excluded datetime columns from MICE imputation
+3. Filtered out 100% missing columns before MICE fitting
+4. Reordered transform steps: log/scale BEFORE categorical conversion
 
 ### 🔄 Test 5: S-Learner
 **Module**: `src/s_learner.py`, `steps/train_s_learner.py`
