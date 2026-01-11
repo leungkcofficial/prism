@@ -109,18 +109,17 @@ class DeepSurvWrapper:
 
         Uses MLP architecture from nn_architectures.py.
         """
-        # Create network configuration
-        config = {
-            'architecture': 'mlp',
-            'input_dim': self.input_dim,
-            'hidden_layers': self.hidden_layers,
-            'output_dim': 1,  # Cox model outputs single hazard value
-            'dropout': self.dropout,
-            'batch_norm': self.batch_norm
-        }
-
         # Use create_network factory from nn_architectures.py
-        net = create_network(config)
+        net = create_network(
+            model_type='deepsurv',
+            input_dim=self.input_dim,
+            hidden_dims=self.hidden_layers,
+            output_dim=1,  # Cox model outputs single hazard value
+            dropout=self.dropout,
+            activation='relu',
+            batch_norm=self.batch_norm,
+            network_type='ann'
+        )
 
         return net
 
@@ -206,7 +205,19 @@ class DeepSurvWrapper:
             val_data=val_data_processed
         )
 
-        logger.info(f"Training complete. Final loss: {log.monitors['train']['loss'][-1]:.4f}")
+        # Log structure varies - check what's available
+        if hasattr(log, 'monitors') and log.monitors:
+            if 'train' in log.monitors and 'loss' in log.monitors['train']:
+                logger.info(f"Training complete. Final loss: {log.monitors['train']['loss'][-1]:.4f}")
+            else:
+                logger.info(f"Training complete. Log structure: {log.monitors.keys() if hasattr(log.monitors, 'keys') else 'unknown'}")
+        else:
+            logger.info(f"Training complete.")
+
+        # Compute baseline hazards (required for CoxPH survival predictions)
+        logger.info("Computing baseline hazards...")
+        _ = self.model.compute_baseline_hazards()
+        logger.info("Baseline hazards computed")
 
         return log
 

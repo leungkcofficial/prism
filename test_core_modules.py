@@ -363,6 +363,127 @@ def test_preprocessing(cohort_df, features_df):
         return None
 
 
+def test_s_learner(master_processed):
+    """Test S-Learner training"""
+    logger.info("\n" + "=" * 80)
+    logger.info("TEST: S-LEARNER TRAINING")
+    logger.info("=" * 80)
+
+    if master_processed is None or master_processed.empty:
+        logger.error("Skipping - no preprocessed data available")
+        return None
+
+    try:
+        from src.s_learner import SLearner
+        import numpy as np
+
+        logger.info(f"\nPreparing data for S-Learner...")
+        logger.info(f"  Input shape: {master_processed.shape}")
+
+        # Extract features and outcomes
+        # Exclude non-feature columns: key, t0_date, A (treatment), duration, event
+        exclude_cols = ['key', 't0_date', 'A', 'duration', 'event']
+        feature_cols = [col for col in master_processed.columns if col not in exclude_cols]
+
+        # Filter to numeric features only (exclude categorical for now)
+        numeric_features = []
+        for col in feature_cols:
+            if col in master_processed.columns:
+                # Skip categorical columns (they have 'category' dtype)
+                if not pd.api.types.is_categorical_dtype(master_processed[col]):
+                    # Also skip columns that are 100% missing
+                    if master_processed[col].notna().sum() > 0:
+                        numeric_features.append(col)
+
+        logger.info(f"  Feature columns: {len(numeric_features)}")
+        logger.info(f"  Features: {numeric_features}")
+
+        # Extract data as numpy arrays
+        X = master_processed[numeric_features].values.astype(np.float32)
+        A = master_processed['A'].values.astype(np.int32)
+        durations = master_processed['duration'].values.astype(np.float32)
+        events = master_processed['event'].values.astype(np.int32)
+
+        # Handle NaN values (should be minimal after preprocessing)
+        nan_mask = np.isnan(X).any(axis=1)
+        if nan_mask.any():
+            logger.warning(f"  Warning: {nan_mask.sum()} samples with NaN, will be excluded")
+            X = X[~nan_mask]
+            A = A[~nan_mask]
+            durations = durations[~nan_mask]
+            events = events[~nan_mask]
+
+        logger.info(f"\n✓ Data prepared:")
+        logger.info(f"  Samples: {len(X)}")
+        logger.info(f"  Features: {X.shape[1]}")
+        logger.info(f"  Treatment A=1: {A.sum()} ({A.mean()*100:.1f}%)")
+        logger.info(f"  Events: {events.sum()} ({events.mean()*100:.1f}%)")
+        logger.info(f"  Duration range: [{durations.min():.0f}, {durations.max():.0f}] days")
+
+        # Initialize S-Learner
+        logger.info("\nInitializing S-Learner...")
+        input_dim = X.shape[1] + 1  # +1 for treatment A
+        s_learner = SLearner(
+            input_dim=input_dim,
+            hidden_layers=[64, 32],  # Smaller for small dataset
+            dropout=0.2,
+            learning_rate=0.001,
+            device='cpu',  # Use CPU for small dataset
+            random_seed=42
+        )
+
+        # Train S-Learner (small epochs for testing)
+        logger.info("\nTraining S-Learner...")
+        log = s_learner.fit(
+            X=X,
+            A=A,
+            durations=durations,
+            events=events,
+            batch_size=16,  # Small batch for small dataset
+            epochs=50,  # Reduced for testing
+            patience=10,
+            verbose=False
+        )
+
+        logger.info(f"\n✓ S-Learner training complete!")
+        # Check log structure
+        if hasattr(log, 'monitors') and log.monitors:
+            if 'train' in log.monitors:
+                if isinstance(log.monitors['train'], dict) and 'loss' in log.monitors['train']:
+                    logger.info(f"  Final training loss: {log.monitors['train']['loss'][-1]:.4f}")
+                    logger.info(f"  Epochs trained: {len(log.monitors['train']['loss'])}")
+                else:
+                    logger.info(f"  Training log structure: {type(log.monitors['train'])}")
+            else:
+                logger.info(f"  Available monitors: {list(log.monitors.keys())}")
+
+        # Compute C-index
+        logger.info("\nEvaluating model...")
+        cindex = s_learner.compute_cindex(X, A, durations, events)
+        logger.info(f"  C-index: {cindex:.3f}")
+
+        # Compute ATE and ATT
+        logger.info("\nComputing treatment effects...")
+        ate = s_learner.compute_ate(X, times=[365, 1095, 1825])
+        logger.info(f"  ATE at 1 year: {ate[365]:.4f}")
+        logger.info(f"  ATE at 3 years: {ate[1095]:.4f}")
+        logger.info(f"  ATE at 5 years: {ate[1825]:.4f}")
+
+        if A.sum() > 0:
+            att = s_learner.compute_att(X, A, times=[365, 1095, 1825])
+            logger.info(f"  ATT at 1 year: {att[365]:.4f}")
+            logger.info(f"  ATT at 3 years: {att[1095]:.4f}")
+            logger.info(f"  ATT at 5 years: {att[1825]:.4f}")
+
+        return s_learner
+
+    except Exception as e:
+        logger.error(f"✗ S-Learner training failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def main():
     """Run tests"""
     logger.info("PRISM CORE MODULE TESTING")
@@ -374,6 +495,7 @@ def main():
     cohort_df = None
     features_df = None
     master_processed = None
+    s_learner = None
 
     if data:
         # Test 2: Cohort formation
@@ -386,6 +508,10 @@ def main():
             if features_df is not None and not features_df.empty:
                 # Test 4: Preprocessing
                 master_processed = test_preprocessing(cohort_df, features_df)
+
+                if master_processed is not None and not master_processed.empty:
+                    # Test 5: S-Learner training
+                    s_learner = test_s_learner(master_processed)
 
     logger.info("\n" + "=" * 80)
     logger.info("TESTING COMPLETE")
