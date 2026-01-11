@@ -20,6 +20,7 @@ import logging
 # Import existing data processing utilities
 from src.dx_ingester import ICD10Ingester
 from src.lab_result_mapper import UrineLabResultMapper
+from src.data_cleaning import ComorbidityProcessor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -54,25 +55,27 @@ class FeatureExtractor:
         'uacr'           # UACR (mg/mmol)
     ]
 
-    # CCI comorbidity flags (19 categories)
+    # CCI comorbidity flags (match ComorbidityProcessor names)
     CCI_FLAGS = [
         'myocardial_infarction',
         'congestive_heart_failure',
         'peripheral_vascular_disease',
         'cerebrovascular_disease',
         'dementia',
-        'copd',
+        'chronic_pulmonary_disease',
         'rheumatic_disease',
         'peptic_ulcer_disease',
-        'liver_disease_mild',
+        'mild_liver_disease',
         'diabetes_wo_complication',
         'diabetes_w_complication',
         'hemiplegia_paraplegia',
-        'renal_disease',
-        'cancer',
-        'liver_disease_mod_severe',
-        'metastatic_solid_tumor',
-        'aids_hiv'
+        'renal_mild_moderate',
+        'renal_severe',
+        'any_malignancy',
+        'metastatic_cancer',
+        'liver_severe',
+        'hiv',
+        'aids'
     ]
 
     def __init__(
@@ -322,17 +325,32 @@ class FeatureExtractor:
             ]
 
             if len(patient_icd10) > 0:
-                # Use ICD10Ingester to compute CCI
-                dx_ingester = ICD10Ingester()
-                cci_result = dx_ingester.process_patient_diagnoses(patient_icd10)
+                # Prepare data for ComorbidityProcessor
+                # It expects column named 'icd10' not 'icd10_code'
+                patient_icd10_processed = patient_icd10.copy()
+                if 'icd10_code' in patient_icd10_processed.columns:
+                    patient_icd10_processed = patient_icd10_processed.rename(columns={'icd10_code': 'icd10'})
 
-                # Update features
-                for flag in self.CCI_FLAGS:
-                    if flag in cci_result:
-                        features_df.at[idx, flag] = int(cci_result[flag])
+                # Use ComorbidityProcessor to compute CCI
+                cci_result = ComorbidityProcessor.process_icd10_data(patient_icd10_processed)
 
-                if 'cci_score_total' in cci_result:
-                    features_df.at[idx, 'cci_score_total'] = cci_result['cci_score_total']
+                if not cci_result.empty:
+                    # Take the most recent row (after forward fill)
+                    latest_row = cci_result.iloc[-1]
+
+                    # Update features
+                    for flag in self.CCI_FLAGS:
+                        if flag in cci_result.columns:
+                            # Use max value across all records (any occurrence = 1)
+                            features_df.at[idx, flag] = int(cci_result[flag].max())
+
+                    # Calculate CCI score total using the weights
+                    cci_score = 0
+                    for flag, weight in ComorbidityProcessor.cci_weights.items():
+                        if flag in cci_result.columns and cci_result[flag].max() > 0:
+                            cci_score += weight
+
+                    features_df.at[idx, 'cci_score_total'] = cci_score
 
         # Log prevalence
         for flag in self.CCI_FLAGS:
