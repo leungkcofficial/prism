@@ -56,9 +56,22 @@ print(f"Treatment balance: {cohort_df['A'].value_counts()}")
 - Column names may not match (need to check cr_df structure)
 - Date formats may need conversion
 
-### 🔄 Test 3: Feature Extraction
+### ✅ Test 3: Feature Extraction - PASSED ✓
 **Module**: `src/feature_extractor.py`, `steps/extract_features.py`
+**Status**: Working correctly
 **Dependencies**: cohort_df, lab_dfs, icd10_df
+**Results** (44 patients):
+- **Lab features** (8/8): All extracted with lookback windows
+  - Creatinine: 0% missing
+  - Hemoglobin: 9.1% missing
+  - Albumin: 4.5% missing
+  - A1c: 63.6% missing
+  - Phosphate: 4.5% missing
+  - Bicarbonate: 15.9% missing
+- **CCI features** (19/19): All comorbidity flags extracted
+  - Diabetes w/o comp: 34.1%, Renal: 43.2%
+- **Total features**: 30 columns per patient
+
 **Test**:
 ```python
 from src.feature_extractor import FeatureExtractor
@@ -67,11 +80,6 @@ features_df = extractor.extract(cohort_df, lab_dfs, icd10_df)
 print(features_df.head())
 print(f"Features: {len(features_df.columns)}")
 ```
-
-**Expected Issues**:
-- Lab DataFrame column names may not match
-- ICD-10 processing may need adjustment
-- Missing value handling
 
 ### 🔄 Test 4: Preprocessing
 **Module**: `src/ckd_preprocessor.py`, `steps/preprocess_data.py`
