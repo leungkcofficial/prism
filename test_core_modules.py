@@ -152,11 +152,11 @@ def test_cohort_formation(data):
                 logger.error("eGFR column still not found after calculation!")
                 return None
 
-        # Use a test subset for speed
-        logger.info("\nUsing subset for testing (first 5000 creatinine records)...")
-        cr_df_test = cr_df.head(5000).copy()
+        # Use full dataset to ensure we capture all treatment variations
+        logger.info("\nUsing full dataset for cohort formation...")
+        cr_df_test = cr_df.copy()
         unique_keys = cr_df_test['key'].unique()
-        logger.info(f"Test subset: {cr_df_test.shape}, {len(unique_keys)} unique patients")
+        logger.info(f"Full dataset: {cr_df_test.shape}, {len(unique_keys)} unique patients")
 
         # Initialize cohort builder
         logger.info("\nInitializing CohortBuilder...")
